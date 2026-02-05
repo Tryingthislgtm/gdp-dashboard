@@ -39,7 +39,20 @@ with col1:
     current_plan_data = plans_df[plans_df['PlanName'] == current_plan].iloc[0]
     current_plan_price = current_plan_data['BasePrice']
     
-    st.info(f"**Current:** {current_plan}\n\n{current_plan_data['Description']}\n\n💰 ${current_plan_price:,.2f}/month")
+    # Number of lenses for this customer (affects pricing totals)
+    num_lenses = st.number_input(
+        'Number of Lenses',
+        min_value=1,
+        max_value=200,
+        value=1,
+        step=1,
+    )
+
+    current_plan_price_total = current_plan_price * int(num_lenses)
+
+    st.info(
+        f"**Current:** {current_plan}\n\n{current_plan_data['Description']}\n\n💰 ${current_plan_price:,.2f}/lens — ${current_plan_price_total:,.2f}/month total"
+    )
     
     ''
     
@@ -56,9 +69,12 @@ with col1:
     
     switch_plan_data = plans_df[plans_df['PlanName'] == switch_plan].iloc[0]
     switch_plan_price = switch_plan_data['BasePrice']
-    plan_switch_savings = current_plan_price - switch_plan_price
-    
-    st.info(f"**New Plan:** {switch_plan}\n\n{switch_plan_data['Description']}\n\n💰 ${switch_plan_price:,.2f}/month")
+    switch_plan_price_total = switch_plan_price * int(num_lenses)
+    plan_switch_savings = current_plan_price_total - switch_plan_price_total
+
+    st.info(
+        f"**New Plan:** {switch_plan}\n\n{switch_plan_data['Description']}\n\n💰 ${switch_plan_price:,.2f}/lens — ${switch_plan_price_total:,.2f}/month total"
+    )
     
     if plan_switch_savings > 0:
         st.success(f'💡 **Switch savings: ${plan_switch_savings:,.2f}/month** from plan change alone!')
@@ -86,7 +102,8 @@ with col1:
             value=10,
             step=1
         )
-        discount_amount = switch_plan_price * (promo_value / 100)
+        # Discount applies to the total switched plan price (all lenses)
+        discount_amount = switch_plan_price_total * (promo_value / 100)
     elif promo_type == 'Flat Amount Discount':
         promo_value = st.number_input(
             'Flat Discount Amount ($)',
@@ -95,7 +112,8 @@ with col1:
             step=5.0,
             format='%.2f'
         )
-        discount_amount = min(promo_value, switch_plan_price)
+        # Flat discount applied against the total switched plan price
+        discount_amount = min(promo_value, switch_plan_price_total)
     else:
         discount_amount = 0.0
     
@@ -120,8 +138,8 @@ with col1:
 with col2:
     st.subheader('📊 Billing Comparison')
     
-    # Use the switched plan price as base for calculations
-    base_price = switch_plan_price
+    # Use the switched plan price as base for calculations (total for all lenses)
+    base_price = switch_plan_price_total
     
     # Calculate final bill with taxes and fees
     bill_after_discount = base_price - discount_amount
@@ -137,7 +155,7 @@ with col2:
     
     # Total savings (plan switch + promotion)
     total_savings = plan_switch_savings + discount_amount
-    savings_percent = (total_savings / current_plan_price * 100) if current_plan_price > 0 else 0
+    savings_percent = (total_savings / current_plan_price_total * 100) if current_plan_price_total > 0 else 0
     
     # Display metrics
     metric_cols = st.columns(3)
@@ -145,7 +163,7 @@ with col2:
     with metric_cols[0]:
         st.metric(
             label='Current Plan',
-            value=f'${current_plan_price:,.2f}',
+            value=f'${current_plan_price_total:,.2f}',
             delta=None,
         )
     
@@ -183,9 +201,9 @@ with col2:
             'FINAL MONTHLY BILL'
         ],
         'Amount': [
-            f'${current_plan_price:,.2f}',
+            f'${current_plan_price_total:,.2f}',
             f'-${plan_switch_savings:,.2f}',
-            f'${switch_plan_price:,.2f}',
+            f'${switch_plan_price_total:,.2f}',
             f'-${discount_amount:,.2f}',
             f'${bill_after_discount:,.2f}',
             f'${taxes:,.2f}',
@@ -242,6 +260,9 @@ Effective: {bill_start_date.strftime('%b %d, %Y')}
 
 Ready? Reply YES or call us!'''
     
+    # Show totals (all lenses) in the message
+    sms_message = sms_message.replace(f"(${current_plan_price:,.2f}/mo)", f"(${current_plan_price_total:,.2f}/mo)")
+    sms_message = sms_message.replace(f"(${switch_plan_price:,.2f}/mo)", f"(${switch_plan_price_total:,.2f}/mo)")
     st.code(sms_message, language='plaintext')
     
     st.info(f'📊 **Message Length:** {len(sms_message)} characters ({(len(sms_message) // 160) + 1} SMS)')
@@ -259,11 +280,11 @@ We've reviewed your account and found you could save significant money by switch
 
 CURRENT SITUATION:
 Plan: {current_plan}
-Monthly Cost: ${current_plan_price:,.2f}
+Monthly Cost: ${current_plan_price_total:,.2f}
 
 RECOMMENDED SWITCH:
 Plan: {switch_plan}
-Monthly Cost: ${switch_plan_price:,.2f}
+Monthly Cost: ${switch_plan_price_total:,.2f}
 
 Plan Switch Savings: -${plan_switch_savings:,.2f}/month
 {f'Special Promotional Discount: -${discount_amount:,.2f}/month' if discount_amount > 0 else ''}
@@ -274,7 +295,7 @@ TOTAL MONTHLY SAVINGS: ${total_savings:,.2f} ({savings_percent:.1f}%)
 
 YOUR NEW BILL:
 
-New Plan Base Price:            ${switch_plan_price:,.2f}
+New Plan Base Price:            ${switch_plan_price_total:,.2f}
 {f'Promotional Discount:          -${discount_amount:,.2f}' if discount_amount > 0 else ''}
 Subtotal:                       ${bill_after_discount:,.2f}
 Taxes (8.5%):                  ${taxes:,.2f}
@@ -322,23 +343,23 @@ with tab3:
 
 I've been reviewing your account, and I think you might be overpaying for the plan you're currently on.
 
-Right now you're on our {current_plan} plan at ${current_plan_price:,.2f} per month.
+Right now you're on our {current_plan} plan at ${current_plan_price_total:,.2f} per month.
 
 Based on your usage, I'd recommend switching to our {switch_plan} plan. It's actually got better features AND it's cheaper:
 
 📊 CURRENT PLAN:
   Plan: {current_plan}
-  Cost: ${current_plan_price:,.2f}/month
+    Cost: ${current_plan_price_total:,.2f}/month
 
 📊 RECOMMENDED PLAN:
   Plan: {switch_plan}
-  Cost: ${switch_plan_price:,.2f}/month
+    Cost: ${switch_plan_price_total:,.2f}/month
   
   ✅ Savings from the plan switch: ${plan_switch_savings:,.2f}/month
 
 {f"And here's the best part — we also have a special promotion right now that'll save you an additional ${discount_amount:,.2f}/month." if discount_amount > 0 else ""}
 
-{f"So your total monthly savings would be: ${total_savings:,.2f}/month" if discount_amount > 0 else f"So your new monthly bill would be: ${switch_plan_price:,.2f}/month"}
+{f"So your total monthly savings would be: ${total_savings:,.2f}/month" if discount_amount > 0 else f"So your new monthly bill would be: ${switch_plan_price_total:,.2f}/month"}
 
 That's ${total_savings * 12:,.2f} in annual savings.
 
