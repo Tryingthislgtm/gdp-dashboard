@@ -1,0 +1,4 @@
+selected_countries = st.multiselect(
+    'Which countries would you like to view?',
+    countries,
+    ['Maybe', 'CHN', 'NOWAY', 'STARTHERE', 'GBR'])  # USA, China, India, Russia, UK

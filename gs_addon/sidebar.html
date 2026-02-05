@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; padding: 12px; }
+      label { display: block; margin-top: 8px; }
+      button { margin-right: 8px; }
+      #result { margin-top: 12px; }
+    </style>
+  </head>
+  <body>
+    <h3>Promotion Impact</h3>
+    <p>Select a numeric range in your sheet, then choose a promotion to preview or apply.</p>
+
+    <label>Type:
+      <select id="type">
+        <option value="percentage">Percentage discount</option>
+        <option value="flat">Flat discount</option>
+      </select>
+    </label>
+
+    <label>Value:
+      <input id="value" type="number" step="0.01" value="10">
+    </label>
+
+    <button onclick="preview()">Preview impact</button>
+    <button onclick="applyPromo()">Apply promotion to sheet</button>
+
+    <div id="result"></div>
+
+    <script>
+      function getPromo() {
+        return { type: document.getElementById('type').value, value: parseFloat(document.getElementById('value').value) };
+      }
+
+      function preview() {
+        document.getElementById('result').innerText = 'Calculating...';
+        google.script.run.withSuccessHandler(function(res) {
+          document.getElementById('result').innerHTML = '<b>Original total:</b> ' + res.originalTotal.toFixed(2) + '<br>' +
+            '<b>New total:</b> ' + res.newTotal.toFixed(2) + '<br>' +
+            '<b>Delta:</b> ' + res.delta.toFixed(2);
+        }).withFailureHandler(function(err) {
+          document.getElementById('result').innerText = 'Error: ' + err.message;
+        }).calculateImpact(getPromo());
+      }
+
+      function applyPromo() {
+        if (!confirm('Apply promotion to selected range? This will overwrite values.')) return;
+        document.getElementById('result').innerText = 'Applying...';
+        google.script.run.withSuccessHandler(function() {
+          document.getElementById('result').innerText = 'Promotion applied.';
+        }).withFailureHandler(function(err) {
+          document.getElementById('result').innerText = 'Error: ' + err.message;
+        }).applyPromotionToRange(getPromo());
+      }
+    </script>
+  </body>
+</html>
