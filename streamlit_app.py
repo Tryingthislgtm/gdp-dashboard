@@ -1,6 +1,8 @@
 import streamlit as st
 from datetime import datetime, timedelta
 from pricing_plans_loader import get_pricing_plans
+import pandas as pd
+from pathlib import Path
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -75,6 +77,35 @@ with col1:
     st.info(
         f"**New Plan:** {switch_plan}\n\n{switch_plan_data['Description']}\n\n💰 ${switch_plan_price:,.2f}/lens — ${switch_plan_price_total:,.2f}/month total"
     )
+
+    # If the plan involved is Core, show add-ons selection
+    core_addons = None
+    selected_core_addons = []
+    core_addons_total = 0.0
+    if switch_plan.lower().startswith('core') or current_plan.lower().startswith('core'):
+        addons_path = Path(__file__).parent / 'data' / 'core_addons.csv'
+        core_addons = pd.read_csv(addons_path)
+        st.subheader('🔧 Core Plan Add-ons')
+        included = core_addons[core_addons['Included'] == True]
+        optional = core_addons[core_addons['Included'] == False]
+
+        st.markdown('**Included with Core:**')
+        for _, r in included.iterrows():
+            st.write(f"- {r['AddonName']}")
+
+        st.markdown('**Optional Add-ons (select to add)**')
+        options = [f"{r['AddonName']} (${r['Price']}/lens)" for _, r in optional.iterrows()]
+        chosen = st.multiselect('Choose optional add-ons', options)
+
+        # Map chosen back to rows and compute total per-lens addon cost
+        for opt in chosen:
+            name = opt.split(' ($')[0]
+            row = optional[optional['AddonName'] == name].iloc[0]
+            selected_core_addons.append(name)
+            core_addons_total += float(row['Price']) * int(num_lenses)
+
+        if core_addons_total > 0:
+            st.info(f"Selected add-ons total: ${core_addons_total:,.2f}/month (for {num_lenses} lenses)")
     
     if plan_switch_savings > 0:
         st.success(f'💡 **Switch savings: ${plan_switch_savings:,.2f}/month** from plan change alone!')
@@ -141,8 +172,14 @@ with col2:
     # Use the switched plan price as base for calculations (total for all lenses)
     base_price = switch_plan_price_total
     
+    # Add core add-ons total into the base price when applicable
+    try:
+        base_price_with_addons = base_price + core_addons_total
+    except NameError:
+        base_price_with_addons = base_price
+
     # Calculate final bill with taxes and fees
-    bill_after_discount = base_price - discount_amount
+    bill_after_discount = base_price_with_addons - discount_amount
     
     # Tax calculation (example: 8.5%)
     tax_rate = 0.085
@@ -211,6 +248,13 @@ with col2:
             f'${final_bill:,.2f}'
         ]
     }
+    # If core add-ons applied, insert a row for add-ons
+    try:
+        if core_addons_total and core_addons_total > 0:
+            breakdown_data['Item'].insert(3, 'Core Add-ons')
+            breakdown_data['Amount'].insert(3, f'${core_addons_total:,.2f}')
+    except NameError:
+        pass
     
     st.table(breakdown_data)
     
